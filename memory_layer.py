@@ -15,6 +15,7 @@ import pickle
 from pathlib import Path
 from litellm import completion
 import time
+import torch
 
 def simple_tokenize(text):
     return word_tokenize(text)
@@ -37,7 +38,35 @@ class OpenAIController(BaseLLMController):
             self.client = OpenAI(api_key=api_key)
         except ImportError:
             raise ImportError("OpenAI package not found. Install it with: pip install openai")
-    
+
+    def get_completion(self, prompt: str, response_format: dict, temperature: float = 0.7) -> str:
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {"role": "system", "content": "You must respond with a JSON object."},
+                {"role": "user", "content": prompt}
+            ],
+            response_format=response_format,
+            temperature=temperature,
+            max_tokens=1000
+        )
+        return response.choices[0].message.content
+
+
+class DeepSeekController(BaseLLMController):
+    def __init__(self, model: str = "deepseek-chat", api_key: Optional[str] = None):
+        try:
+            from openai import OpenAI
+            self.model = model
+            if api_key is None:
+                api_key = os.getenv('DEEPSEEK_API_KEY')
+            if api_key is None:
+                raise ValueError("DeepSeek API key not found. Set DEEPSEEK_API_KEY environment variable.")
+            base_url = os.getenv('DEEPSEEK_BASE_URL', 'https://api.deepseek.com/v1')
+            self.client = OpenAI(api_key=api_key, base_url=base_url)
+        except ImportError:
+            raise ImportError("OpenAI package not found. Install it with: pip install openai")
+
     def get_completion(self, prompt: str, response_format: dict, temperature: float = 0.7) -> str:
         response = self.client.chat.completions.create(
             model=self.model,
@@ -101,13 +130,15 @@ class OllamaController(BaseLLMController):
 class LLMController:
     """LLM-based controller for memory metadata generation"""
     def __init__(self, 
-                 backend: Literal["openai", "ollama"] = "openai",
+                 backend: Literal["openai", "ollama", "deepseek"] = "openai",
                  model: str = "gpt-4", 
                  api_key: Optional[str] = None):
         if backend == "openai":
             self.llm = OpenAIController(model, api_key)
         elif backend == "ollama":
             self.llm = OllamaController(model)
+        elif backend == "deepseek":
+            self.llm = DeepSeekController(model, api_key)
         else:
             raise ValueError("Backend must be either 'openai' or 'ollama'")
 
