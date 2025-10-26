@@ -80,6 +80,34 @@ class DeepSeekController(BaseLLMController):
         )
         return response.choices[0].message.content
 
+
+class KimiController(BaseLLMController):
+    def __init__(self, model: str = "moonshot-v1-8k", api_key: Optional[str] = None):
+        try:
+            from openai import OpenAI
+            self.model = model
+            if api_key is None:
+                api_key = os.getenv('KIMI_API_KEY') or os.getenv('MOONSHOT_API_KEY')
+            if api_key is None:
+                raise ValueError("Kimi API key not found. Set KIMI_API_KEY or MOONSHOT_API_KEY environment variable.")
+            base_url = os.getenv('KIMI_BASE_URL', 'https://api.moonshot.cn/v1')
+            self.client = OpenAI(api_key=api_key, base_url=base_url)
+        except ImportError:
+            raise ImportError("OpenAI package not found. Install it with: pip install openai")
+
+    def get_completion(self, prompt: str, response_format: dict, temperature: float = 0.7) -> str:
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {"role": "system", "content": "You must respond with a JSON object."},
+                {"role": "user", "content": prompt}
+            ],
+            response_format=response_format,
+            temperature=temperature,
+            max_tokens=1000
+        )
+        return response.choices[0].message.content
+
 class OllamaController(BaseLLMController):
     def __init__(self, model: str = "llama2"):
         from ollama import chat
@@ -130,7 +158,7 @@ class OllamaController(BaseLLMController):
 class LLMController:
     """LLM-based controller for memory metadata generation"""
     def __init__(self, 
-                 backend: Literal["openai", "ollama", "deepseek"] = "openai",
+                 backend: Literal["openai", "ollama", "deepseek", "kimi"] = "openai",
                  model: str = "gpt-4", 
                  api_key: Optional[str] = None):
         if backend == "openai":
@@ -139,8 +167,10 @@ class LLMController:
             self.llm = OllamaController(model)
         elif backend == "deepseek":
             self.llm = DeepSeekController(model, api_key)
+        elif backend == "kimi":
+            self.llm = KimiController(model, api_key)
         else:
-            raise ValueError("Backend must be either 'openai' or 'ollama'")
+            raise ValueError("Backend must be one of 'openai', 'ollama', 'deepseek', or 'kimi'")
 
 class MemoryNote:
     """Basic memory unit with metadata"""
