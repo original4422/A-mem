@@ -1,3 +1,4 @@
 a-mem/
 __pycache__/
 logs/
+traces/
