@@ -72,7 +72,7 @@ pip install -r requirements.txt
 Option 2: Using Conda
 ```bash
 # Create and activate conda environment
-conda create -n myenv python=3.9
+conda create -n myenv python=3.10.18
 conda activate myenv
 
 # Install dependencies
