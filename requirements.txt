@@ -24,3 +24,7 @@ python-dotenv==1.0.1
 
 # Optional dependencies
 # pytorch-cuda==2.4.0  # Only if using CUDA
+
+# clouggpt
+azure-identity==1.21.0
+azure-identity-broker==1.2.0
