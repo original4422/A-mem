@@ -1,5 +1,5 @@
 from ast import Str
-from typing import List, Dict, Optional, Literal, Any, Union
+from typing import List, Dict, Optional, Literal, Any, Union, Tuple
 import json
 from datetime import datetime
 import uuid
@@ -16,6 +16,7 @@ from pathlib import Path
 from litellm import completion
 import time
 import torch
+from cloudgpt_aoai import cloudgpt_aoai
 
 def simple_tokenize(text):
     return word_tokenize(text)
@@ -107,6 +108,106 @@ class KimiController(BaseLLMController):
             max_tokens=1000
         )
         return response.choices[0].message.content
+    
+class CloudGPTController(BaseLLMController):
+    def __init__(self, model: str = "gpt-4o"):
+        self.model = model
+
+    def get_completion(
+        self,
+        prompt: str,
+        response_format: dict,
+        temperature: float = 0.7,
+        max_tokens: int = 4096,
+        top_p: float = 0.95,
+        stream: bool = False
+    ) -> Any:
+        """
+        Get completion content using the configured API
+        
+        Parameters:
+            messages: List of message dictionaries
+            temperature: Sampling temperature
+            max_tokens: Maximum number of tokens to generate
+            top_p: Top-p sampling parameter
+            stream: Whether to stream the response
+            
+        Returns:
+            Completion object or generator for streaming
+        """
+        # message
+        messages=[
+            {"role": "system", "content": "You must respond with a JSON object."},
+            {"role": "user", "content": prompt}
+        ],
+
+        # Prepare common parameters
+        params = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "top_p": top_p,
+            "stream": stream,
+            "response_format": response_format
+        }
+        
+        # Add stream_options for token usage tracking when streaming
+        if stream:
+            params["stream_options"] = {"include_usage": True}
+        
+        # Use cloudgpt_aoai as the default API
+        response = cloudgpt_aoai.get_chat_completion(**params)
+        return response.choices[0].message.content
+    
+    def stream_completion(
+        self,
+        messages: List[Dict[str, str]],
+        temperature: float = 0,
+        max_tokens: int = 16384,
+        top_p: float = 0.95,
+        callback: Optional[callable] = None,
+        json_response: bool = True
+    ) -> Tuple[str, Dict[str, int]]:
+        """
+        Stream completion content from the API, calling the callback for each chunk
+        
+        Parameters:
+            messages: List of message dictionaries
+            temperature: Sampling temperature
+            max_tokens: Maximum number of tokens to generate
+            top_p: Top-p sampling parameter
+            callback: Function to call for each chunk
+            
+        Returns:
+            Tuple of (full generated text, token usage info)
+        """
+        # Get streaming response with stream_options to include token usage
+        response_stream = self.get_completion(
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            top_p=top_p,
+            stream=True,
+            json_response=json_response
+        )
+        
+        full_response = ""
+        final_usage = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
+        
+        for chunk in response_stream:
+            # CloudGPT handling
+            if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
+                content = chunk.choices[0].delta.content
+                full_response += content
+                if callback:
+                    callback(content)
+            
+            # Extract usage information from chunks that contain it
+            if hasattr(chunk, 'usage') and chunk.usage:
+                final_usage = self._extract_token_usage(chunk)
+        
+        return full_response, final_usage
 
 class OllamaController(BaseLLMController):
     def __init__(self, model: str = "llama2"):
@@ -158,8 +259,8 @@ class OllamaController(BaseLLMController):
 class LLMController:
     """LLM-based controller for memory metadata generation"""
     def __init__(self, 
-                 backend: Literal["openai", "ollama", "deepseek", "kimi"] = "openai",
-                 model: str = "gpt-4", 
+                 backend: Literal["openai", "ollama", "deepseek", "kimi", "cloudgpt"] = "openai",
+                 model: str = "gpt-4o-20241120-2", 
                  api_key: Optional[str] = None):
         if backend == "openai":
             self.llm = OpenAIController(model, api_key)
@@ -169,8 +270,10 @@ class LLMController:
             self.llm = DeepSeekController(model, api_key)
         elif backend == "kimi":
             self.llm = KimiController(model, api_key)
+        elif backend == "cloudgpt":
+            self.llm = CloudGPTController(model)
         else:
-            raise ValueError("Backend must be one of 'openai', 'ollama', 'deepseek', or 'kimi'")
+            raise ValueError("Backend must be one of 'openai', 'ollama', 'deepseek', 'kimi', or 'cloudgpt'")
 
 class MemoryNote:
     """Basic memory unit with metadata"""

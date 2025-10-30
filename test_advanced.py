@@ -396,7 +396,7 @@ def main():
     parser = argparse.ArgumentParser(description="Evaluate text-only agent on LoComo dataset")
     parser.add_argument("--dataset", type=str, default="data/locomo10.json",
                       help="Path to the dataset file")
-    parser.add_argument("--model", type=str, default="gpt-4o-mini",
+    parser.add_argument("--model", type=str, default="gpt-4o-20241120-2",
                       help="OpenAI model to use")
     parser.add_argument("--output", type=str, default=None,
                       help="Path to save evaluation results")
