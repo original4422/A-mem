@@ -139,7 +139,7 @@ class CloudGPTController(BaseLLMController):
         messages=[
             {"role": "system", "content": "You must respond with a JSON object."},
             {"role": "user", "content": prompt}
-        ],
+        ]
 
         # Prepare common parameters
         params = {
